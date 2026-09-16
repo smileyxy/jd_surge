@@ -49,7 +49,7 @@ Scripts are standalone: **no imports, no modules, no bundler**. Each file ends w
 **QX loader stubs `eval()` a remote file.** `Scripts/QuantumultX/*.js` fetch `config_helper.js` from `conversun/jd_surge@main` at runtime — they carry no logic of their own beyond setting `$argument`. They previously pointed at a `W-Webber/jd_surge@feature-qx` fork, so QX panel users never received changes made here; if you see that fork URL reappear, it is a regression.
 
 **Trigger regex lives in two files.** `jd_cookie_sync.sgmodule` and `jd_cookie_sync.snippet` each hardcode
-`functionId=(getJDUserInfoUnion|queryJDUserInfo|myHomeV2|home|wareBusiness|basicConfig)`.
+`functionId=(getJDUserInfoUnion|queryJDUserInfo|myHomeV2|home|wareBusiness|basicConfig|logConfig)`.
 Change one → change the other. (`CLAUDE.md` lists only `wareBusiness|basicConfig`; stale.)
 
 **All accounts share the name `JD_COOKIE`.** There is no `JD_COOKIE_2`/`_3`. Identity is the `pt_pin` parsed out of the env `value` (`extractPtPinFromEnv`). The README's multi-numbered-variable claim is stale — do not "restore" it.
@@ -64,7 +64,7 @@ Change one → change the other. (`CLAUDE.md` lists only `wareBusiness|basicConf
 
 **Sync order is add-then-delete, and must stay that way.** `handleExistingEnvs` adds the new `JD_COOKIE` *before* deleting stale ones. Reversing it reintroduces a window where a killed script leaves the account with zero cookies in Qinglong. Two follow-on rules: if `addEnv` fails, keep the old envs and return early; if it returns `isDuplicate`, the new value landed on some *other* env row, so skip the cleanup or the account ends up with nothing.
 
-**One sync at a time per account.** `acquireSyncLock` / `releaseSyncLock` use `jd_cookie_syncing_{ptPin}` with a `SYNC_LOCK_TTL` expiry, released in a `finally`. The persistent store has no atomic compare-and-swap, so this only narrows the race from a multi-second network round-trip to a single read+write — it is not a true mutex. The TTL exists because Surge can kill the script mid-flight; without it a crashed run would wedge the account forever. The trigger regex matches 6 `functionId`s, several of which fire concurrently at JD app launch, so this path is exercised constantly.
+**One sync at a time per account.** `acquireSyncLock` / `releaseSyncLock` use `jd_cookie_syncing_{ptPin}` with a `SYNC_LOCK_TTL` expiry, released in a `finally`. The persistent store has no atomic compare-and-swap, so this only narrows the race from a multi-second network round-trip to a single read+write — it is not a true mutex. The TTL exists because Surge can kill the script mid-flight; without it a crashed run would wedge the account forever. The trigger regex matches 7 `functionId`s, several of which fire concurrently at JD app launch, so this path is exercised constantly.
 
 **Timeout budgets must nest.** `REQUEST_TIMEOUT` (6s, `jd_cookie_sync.js`) must stay well under the sgmodule's `timeout=20`, because a full sync is up to 4 serial round-trips. When the module value was `10`, the internal timeout could never fire — Surge killed the script first, landing it in exactly the interrupted-write window described above. Change one, re-check the other.
 
