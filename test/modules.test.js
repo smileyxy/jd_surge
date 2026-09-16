@@ -11,7 +11,7 @@ const assert = require('node:assert/strict');
 const { readSource, runQxStub, FULL_CONFIG } = require('./helpers/harness');
 
 const TRIGGER_REGEX =
-    'functionId=(getJDUserInfoUnion|queryJDUserInfo|myHomeV2|home|wareBusiness|basicConfig)';
+    'functionId=(getJDUserInfoUnion|queryJDUserInfo|myHomeV2|home|wareBusiness|basicConfig|logConfig)';
 
 test('触发正则在 sgmodule 与 snippet 中保持一致', () => {
     // 两个文件各自硬编码一份，改一个忘改另一个 = QX 用户静默失效
@@ -72,7 +72,7 @@ test('所有远程脚本 URL 都指向本仓库 main 分支', () => {
         assert.ok(!src.includes('W-Webber'), `${key} 仍指向 fork 仓库，这是回归`);
 
         for (const url of src.match(/https:\/\/raw\.githubusercontent\.com\/\S+/g) || []) {
-            assert.match(url, /conversun\/jd_surge/, `${key} 中存在外部仓库 URL: ${url}`);
+            assert.match(url, /(?:conversun|smileyxy)\/jd_surge/, `${key} 中存在非 jd_surge 仓库 URL: ${url}`);
         }
     }
 });
