@@ -19,16 +19,50 @@ const DEFAULT_UPDATE_INTERVAL = 1800; // 默认30分钟
 const REQUEST_TIMEOUT = 6000;       // 单次请求超时，必须显著小于 sgmodule 的 timeout=20
 const SYNC_LOCK_TTL = 30000;        // 同步锁自动过期时间，需大于脚本最长存活时间
 const DEBUG_LOGGING = true;          // 调试分支：输出过滤原因，不输出 Cookie/Token/Secret 实际值
+const DEBUG_NOTIFY_TTL = 15000;      // 同一 functionId 15 秒内最多弹一次，避免通知刷屏
+const DEBUG_CONTEXT = {
+    functionId: '[unknown]',
+    messages: []
+};
 
 function debugLog(message) {
-    if (DEBUG_LOGGING) {
-        $.log(`🧪 DEBUG: ${message}`);
-    }
+    if (!DEBUG_LOGGING) return;
+    DEBUG_CONTEXT.messages.push(String(message));
+    $.log(`🧪 DEBUG: ${message}`);
 }
 
 function getFunctionId(url) {
     const match = String(url || '').match(/[?&]functionId=([^&]+)/);
     return match ? decodeURIComponent(match[1]) : '[missing]';
+}
+
+function flushDebugNotification() {
+    if (!DEBUG_LOGGING || DEBUG_CONTEXT.messages.length === 0) {
+        return;
+    }
+
+    const safeFunctionId = String(DEBUG_CONTEXT.functionId || '[unknown]')
+        .replace(/[^a-zA-Z0-9_.-]/g, '_')
+        .slice(0, 80);
+    const notifyKey = `jd_debug_notify_${safeFunctionId}`;
+    const lastNotify = parseInt($.getval(notifyKey) || '0');
+    const now = Date.now();
+
+    if (now - lastNotify < DEBUG_NOTIFY_TTL) {
+        return;
+    }
+
+    $.setval(String(now), notifyKey);
+
+    const body = DEBUG_CONTEXT.messages
+        .slice(0, 10)
+        .join('\n');
+
+    $.msg(
+        'JD Cookie Sync DEBUG',
+        `functionId: ${DEBUG_CONTEXT.functionId}`,
+        body
+    );
 }
 
 // ============= 配置管理 =============
@@ -543,6 +577,7 @@ async function syncToQinglong(cookie, ptPin) {
         const headers = $request.headers || {};
         const requestUrl = $request.url || '';
         const functionId = getFunctionId(requestUrl);
+        DEBUG_CONTEXT.functionId = functionId;
 
         const userAgent = headers['User-Agent'] || headers['user-agent'] || '';
         const cookieHeader = headers['Cookie'] || headers['cookie'] || '';
@@ -574,6 +609,7 @@ async function syncToQinglong(cookie, ptPin) {
         $.log(`❌ 脚本执行异常: ${error.message || error}`);
         $.msg('JD Cookie Sync', '脚本执行异常', String(error));
     } finally {
+        flushDebugNotification();
         $.done({});
     }
 })();
