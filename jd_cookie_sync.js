@@ -18,6 +18,18 @@ const CONFIG_KEYS = {
 const DEFAULT_UPDATE_INTERVAL = 1800; // 默认30分钟
 const REQUEST_TIMEOUT = 6000;       // 单次请求超时，必须显著小于 sgmodule 的 timeout=20
 const SYNC_LOCK_TTL = 30000;        // 同步锁自动过期时间，需大于脚本最长存活时间
+const DEBUG_LOGGING = true;          // 调试分支：输出过滤原因，不输出 Cookie/Token/Secret 实际值
+
+function debugLog(message) {
+    if (DEBUG_LOGGING) {
+        $.log(`🧪 DEBUG: ${message}`);
+    }
+}
+
+function getFunctionId(url) {
+    const match = String(url || '').match(/[?&]functionId=([^&]+)/);
+    return match ? decodeURIComponent(match[1]) : '[missing]';
+}
 
 // ============= 配置管理 =============
 
@@ -450,16 +462,21 @@ async function syncToQinglong(cookie, ptPin) {
 
     // 检查是否需要更新
     const updateCheck = shouldUpdate(ptPin, cookie, config);
+    debugLog(`shouldUpdate=${updateCheck.should}, reason=${updateCheck.reason}`);
     if (!updateCheck.should) {
+        debugLog('停止：命中更新间隔限制');
         return;
     }
 
     // 检查配置
     const configCheck = validateConfig(config);
     if (!configCheck.valid) {
+        debugLog(`停止：青龙配置检查失败 (url=${config.qlUrl ? 'SET' : 'MISSING'}, client_id=${config.clientId ? 'SET' : 'MISSING'}, client_secret=${config.clientSecret ? 'SET' : 'MISSING'})`);
         $.msg('JD Cookie Sync', '配置错误', configCheck.message);
         return;
     }
+
+    debugLog('青龙配置检查通过');
 
     // 抢占同步锁，避免并发触发时互相覆盖/删除对方刚写入的变量
     if (!acquireSyncLock(ptPin)) {
@@ -470,6 +487,9 @@ async function syncToQinglong(cookie, ptPin) {
     try {
         // 获取 Token
         const tokenResult = await getQinglongToken(config);
+        if (tokenResult.success) {
+            debugLog('青龙 Token 获取成功');
+        }
         if (!tokenResult.success) {
             $.msg('JD Cookie Sync', '获取 Token 失败', tokenResult.message);
             return;
@@ -477,6 +497,9 @@ async function syncToQinglong(cookie, ptPin) {
 
         // 查询现有环境变量
         const envListResult = await getEnvList(config, tokenResult.token);
+        if (envListResult.success) {
+            debugLog(`青龙环境变量查询成功，返回 ${Array.isArray(envListResult.data) ? envListResult.data.length : 0} 项`);
+        }
         if (!envListResult.success) {
             $.msg('JD Cookie Sync', '查询环境变量失败', envListResult.message);
             return;
@@ -517,12 +540,20 @@ async function syncToQinglong(cookie, ptPin) {
 
 (async () => {
     try {
-        const headers = $request.headers;
+        const headers = $request.headers || {};
+        const requestUrl = $request.url || '';
+        const functionId = getFunctionId(requestUrl);
+
+        const userAgent = headers['User-Agent'] || headers['user-agent'] || '';
+        const cookieHeader = headers['Cookie'] || headers['cookie'] || '';
+
+        debugLog(`命中请求 functionId=${functionId}`);
+        debugLog(`UA 为 JD4iPhone: ${userAgent.startsWith('JD4iPhone') ? 'YES' : 'NO'}`);
+        debugLog(`Cookie Header: ${cookieHeader ? 'YES' : 'NO'}, pt_key: ${cookieHeader.includes('pt_key=') ? 'YES' : 'NO'}, pt_pin: ${cookieHeader.includes('pt_pin=') ? 'YES' : 'NO'}`);
 
         // 只处理京东主App的请求
-        const userAgent = headers['User-Agent'] || headers['user-agent'] || '';
         if (!userAgent.startsWith('JD4iPhone')) {
-            $.done({});
+            debugLog('停止：User-Agent 不符合 JD4iPhone');
             return;
         }
 
@@ -530,9 +561,11 @@ async function syncToQinglong(cookie, ptPin) {
         const cookieResult = extractCookie(headers);
 
         if (!cookieResult.valid) {
-            $.done({});
+            debugLog(`停止：Cookie 无效 (${cookieResult.message})`);
             return;
         }
+
+        debugLog('Cookie 校验通过，进入同步流程');
 
         // 同步到青龙
         await syncToQinglong(cookieResult.cookie, cookieResult.ptPin);
