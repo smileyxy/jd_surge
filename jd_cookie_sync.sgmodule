@@ -1,11 +1,11 @@
-#!name=JD Cookie Sync to Qinglong
-#!desc=Auto sync JD cookies to Qinglong panel when using JD app
+#!name=JD Cookie Sync DEBUG
+#!desc=DEBUG: match all JD client.action requests and show safe Surge diagnostics
 #!system=ios
 
 [Script]
 # 拦截京东 API 请求，提取 Cookie 并同步到青龙
 # DEBUG 分支：临时匹配所有 api.m.jd.com/client.action 请求，用于发现新版京东实际触发接口
-# 脚本内部仍会检查 JD4iPhone UA、pt_key、pt_pin，并输出不含敏感值的诊断日志
+# 脚本内部仍会检查 JD4iPhone UA、pt_key、pt_pin，并输出不含敏感值的诊断日志与限频通知
 # timeout 必须大于脚本内 REQUEST_TIMEOUT × 串行请求数，否则内部超时保护永远不会生效
 jd_cookie_sync = type=http-request,pattern=^https?:\/\/api\.m\.jd\.com\/client\.action(?:\?.*)?$,requires-body=0,max-size=0,script-path=https://raw.githubusercontent.com/smileyxy/jd_surge/debug-wide-match/jd_cookie_sync.js,timeout=20
 
