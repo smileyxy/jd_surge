@@ -1,0 +1,22 @@
+#!name=i百联每日签到
+#!desc=App「i百联」每日自动签到 + 积分任务，支持多账号槽位自动抓包、通知策略与信息面板一键签到
+#!category=签到任务
+#!system=ios
+#!arguments=cron:0 9 * * *,account_count:1,capture_slot:1,notify_mode:all
+#!arguments-desc=cron: 定时签到 Cron（默认 0 9 * * *，勿含逗号）；account_count: 账号数（默认 1）；capture_slot: 抓包写入槽位（默认 1，多账号切换为 2/3 再打开 App 积分页）；notify_mode: 通知策略（all=始终 / smart=仅异常或得积分 / error=仅异常 / off=静默）
+
+[Panel]
+ibailian_panel = script-name=ibailian_panel, title="i百联每日签到", content="点击立即执行签到与积分任务", icon=gift.fill, icon-color=#FF6B35, update-interval=3600
+
+[Script]
+# Token 自动抓取（打开 App 积分页时触发，拦截 h5_gateway 请求提取凭证写入对应槽位）
+ibailian_gettoken = type=http-request, pattern=^https?:\/\/mh5\.bl\.com\/h5_gateway\/, requires-body=0, max-size=0, timeout=10, script-path=https://raw.githubusercontent.com/smileyxy/jd_surge/main/ibailian/ibailian_gettoken.js, argument="slot={{{capture_slot}}}"
+
+# 每日定时签到 + 积分任务
+ibailian_signin = type=cron, cronexp="{{{cron}}}", wake-system=true, timeout=60, script-path=https://raw.githubusercontent.com/smileyxy/jd_surge/main/ibailian/ibailian_signin.js, argument="mode=cron&account_count={{{account_count}}}&notify_mode={{{notify_mode}}}"
+
+# 信息面板（自动刷新只读展示状态，手动点击立即执行签到与积分任务）
+ibailian_panel = type=generic, timeout=60, script-path=https://raw.githubusercontent.com/smileyxy/jd_surge/main/ibailian/ibailian_signin.js, argument="mode=panel&account_count={{{account_count}}}&notify_mode={{{notify_mode}}}"
+
+[MITM]
+hostname = %APPEND% mh5.bl.com
